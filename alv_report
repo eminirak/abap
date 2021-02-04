@@ -1,0 +1,155 @@
+ABLES : ZMM14011PLT , ZMM14016 , VBKD.
+
+DATA : BEGIN OF GT_DATA OCCURS 0,
+       BWTAR    LIKE    ZMM14011PLT-BWTAR,
+       LGPLA    LIKE    ZMM14011PLT-LGPLA,
+       KDAUF    LIKE    ZMM14011PLT-KDAUF,
+       KDPOS    LIKE    ZMM14011PLT-KDPOS,
+       BSTKD    LIKE    VBKD-BSTKD,
+       MENGE    LIKE    ZMM14011PLT-MENGE,
+       UNAME    LIKE    ZMM14011PLT-UNAME,
+       DATUM    LIKE    ZMM14011PLT-DATUM,
+       UZEIT    LIKE    ZMM14011PLT-UZEIT,
+       LENUM    LIKE    ZMM14011PLT-LENUM,
+       BARCODE  LIKE    ZMM14011PLT-BARCODE,
+       MBLNR    LIKE    ZMM14016-MBLNR,
+  END OF GT_DATA.
+
+
+ SELECTION-SCREEN BEGIN OF BLOCK A WITH FRAME.
+   SELECT-OPTIONS : S_WERKS FOR ZMM14011PLT-WERKS,
+                    S_LIFNR FOR ZMM14011PLT-LIFNR,
+                    S_XBLNR FOR ZMM14016-XBLNR,
+                    S_BLDAT FOR ZMM14016-BLDAT.
+SELECTION-SCREEN END OF BLOCK A.
+
+TYPE-POOLS : SLIS.
+
+  DATA: LT_FLDCAT     TYPE SLIS_T_FIELDCAT_ALV WITH HEADER LINE,
+        GT_FIELDCAT   TYPE SLIS_FIELDCAT_ALV OCCURS 1 WITH HEADER LINE,
+        ALV_LAYOUT    TYPE SLIS_LAYOUT_ALV,
+        GT_HEADER     TYPE SLIS_T_LISTHEADER WITH HEADER LINE,
+        LS_FLDCAT     TYPE SLIS_FIELDCAT_ALV,
+        GS_GRID       TYPE LVC_S_GLAY,
+        GV_REPID      LIKE SY-REPID,
+        GS_LAYOUT     TYPE SLIS_LAYOUT_ALV,
+        OK_CODE       LIKE SY-UCOMM.
+
+DATA: WT_EVENTS    TYPE SLIS_T_EVENT.
+
+GV_REPID = SY-REPID.
+
+START-OF-SELECTION.
+  PERFORM GET_DATA.
+  IF GT_DATA[] IS NOT INITIAL.
+    PERFORM DISPLAY_DATA.
+  ELSE.
+    MESSAGE 'Kayıt Bulunamadı !...' TYPE 'S'.
+  ENDIF.
+
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+  FORM GET_DATA.
+
+  CLEAR : GT_DATA,GT_DATA[].
+
+   SELECT A~WERKS A~BWTAR A~LGPLA A~KDAUF A~KDPOS A~MENGE
+          A~UNAME A~DATUM A~UZEIT A~LENUM A~BARCODE A~LIFNR
+          B~BLDAT B~XBLNR B~MBLNR
+     FROM ZMM14011PLT AS A
+     INNER JOIN ZMM14016 AS B ON  B~WERKS = A~WERKS AND
+                                  B~XBLNR = A~XBLNR AND
+                                  B~LIFNR = A~LIFNR AND
+                                  B~EBELN = A~EBELN AND
+                                  B~EBELP = A~EBELP
+     INTO CORRESPONDING FIELDS OF TABLE GT_DATA
+     WHERE A~WERKS IN S_WERKS AND
+           A~LIFNR IN S_LIFNR AND
+           B~BLDAT IN S_BLDAT AND
+           B~XBLNR IN S_XBLNR.
+
+   IF GT_DATA[] IS NOT INITIAL.
+     SELECT ZMM14011PLT~KDPOS,
+            VBKD~BSTKD,
+            VBKD~POSNR
+       FROM ZMM14011PLT
+       INNER JOIN VBKD ON ZMM14011PLT~KDPOS = VBKD~POSNR
+       FOR ALL ENTRIES IN @GT_DATA
+       WHERE VBKD~POSNR = @GT_DATA-KDPOS
+       INTO TABLE @DATA(LT_VBKD).
+
+       SORT LT_VBKD BY BSTKD.
+   ENDIF.
+
+  LOOP AT GT_DATA.
+     READ TABLE LT_VBKD ASSIGNING FIELD-SYMBOL(<LS_VBKD>)
+                               WITH KEY POSNR = GT_DATA-KDPOS.
+       IF SY-SUBRC EQ '0'.
+         GT_DATA-BSTKD = <LS_VBKD>-BSTKD.
+       ENDIF.
+     MODIFY GT_DATA.
+  ENDLOOP.
+
+
+
+  ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_DATA
+*&---------------------------------------------------------------------*
+  FORM DISPLAY_DATA .
+
+
+  DATA: GV_COL_POS TYPE I.
+  CLEAR : GT_FIELDCAT[], GT_FIELDCAT.
+  DEFINE ADD-FIELDCAT.
+    gt_fieldcat-fieldname     = &1.
+    gt_fieldcat-ref_tabname   = &2.
+    gt_fieldcat-ref_fieldname = &3.
+    gt_fieldcat-seltext_s     = &4.
+    gt_fieldcat-seltext_m     = &4.
+    gt_fieldcat-seltext_l     = &4.
+    gt_fieldcat-reptext_ddic  = &4.
+    gt_fieldcat-ddictxt       = 'L'.
+    "  GT_FIELDCAT-no_out        = &5
+    gt_fieldcat-col_pos       = gv_col_pos.
+    add 1 to gv_col_pos.
+    append gt_fieldcat.
+    clear  gt_fieldcat.
+  END-OF-DEFINITION.
+
+  ADD-FIELDCAT 'BWTAR' 'ZMM14011PLT'  'BWTAR'  'Değerleme türü'.
+  ADD-FIELDCAT 'LGPLA' 'ZMM14011PLT'  'LGPLA'  'Depo adresi'.
+  ADD-FIELDCAT 'KDAUF' 'ZMM14011PLT'  'KDAUF'  'Müşteri sprş.'.
+  ADD-FIELDCAT 'KDPOS' 'ZMM14011PLT'  'KDPOS'  'Mştr.sprş.klm.'.
+  ADD-FIELDCAT 'BSTKD' 'VBKD'         'BSTKD'  'Müşteri SA sprş. no'.
+  ADD-FIELDCAT 'MENGE' 'ZMM14011PLT'  'MENGE'  'SA sprş.miktarı'.
+  ADD-FIELDCAT 'UNAME' 'ZMM14011PLT'  'UNAME'  'Kullanıcı adı'.
+  ADD-FIELDCAT 'DATUM' 'ZMM14011PLT'  'DATUM'  'Tarih'.
+  ADD-FIELDCAT 'UZEIT' 'ZMM14011PLT'  'UZEIT'  'Saat'.
+  ADD-FIELDCAT 'LENUM' 'ZMM14011PLT'  'LENUM'  'Depo Birimi'.
+  ADD-FIELDCAT 'BARCODE' 'ZMM14011PLT'  'BARCODE' 'Malz.Barkod'.
+  ADD-FIELDCAT 'MBLNR' 'ZMM14016'     'MBLNR'  'Malzeme Belgesi'.
+
+  ALV_LAYOUT-GET_SELINFOS = 'X'.
+  ALV_LAYOUT-ZEBRA = 'X'.
+*  ALV_LAYOUT-BOX_FIELDNAME = 'SEL'.
+  ALV_LAYOUT-COLWIDTH_OPTIMIZE = 'X'.
+*  alv_layout-info_fieldname    = 'COLOR'.
+
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      I_CALLBACK_PROGRAM       = SY-REPID
+      IT_FIELDCAT              = GT_FIELDCAT[]
+      IS_LAYOUT                = ALV_LAYOUT
+*     i_callback_top_of_page   = 'TOP_OF_PAGE'
+*     i_callback_pf_status_set = 'SET_PF_STATUS'
+*     i_grid_settings          = gs_grid_settings
+      I_DEFAULT                = 'X'
+      I_SAVE                   = 'X'
+*     i_callback_user_command  = 'USER_COMMAND'
+    TABLES
+      T_OUTTAB                 = GT_DATA[].
+ENDFORM.                    " DISPLAY_DATA
